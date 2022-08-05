@@ -6,7 +6,7 @@ import math
 from config import Config
 
 
-class Embedding(nn.Module):
+class Embeddings(nn.Module):
     """ Patch and Position Embeddings + CLS Token. 
 
     Parameters
@@ -15,7 +15,7 @@ class Embedding(nn.Module):
     patch_size : int - size of the patch
     img_size : int - height or width of the image assuming that it's square
     d_size : int - embedding dimension from config class
-    p : float - dropout rate
+    p_emb : float - embedding dropout rate
 
     Attributes
     ----------
@@ -23,7 +23,7 @@ class Embedding(nn.Module):
     n_patches : int - number of patches
     positions : nn.Parameter - position embeddings randomly intialized at the start
     cls_token : nn.Parameter - learnable classification token(totally unnecessary)
-    pos_drop : nn.Dropout - embedding dropout
+    emb_drop : nn.Dropout - embedding dropout
     
     """
 
@@ -33,7 +33,7 @@ class Embedding(nn.Module):
             patch_size,
             img_size,
             d_size,
-            p
+            p_emb
             ):
 
             super().__init__()
@@ -48,7 +48,7 @@ class Embedding(nn.Module):
             self.n_patches = (img_size // patch_size)**2
             self.positions = nn.Parameter(data = torch.zeros(size=(1, d_size, self.n_patches + 1)))
             self.cls_token = nn.Parameter(data = torch.zeros(size=(1, d_size, 1)))
-            self.dropout = nn.Dropout(p=p)
+            self.emb_drop = nn.Dropout(p=p_emb)
     
     def forward(self, x):
         """ Forward function.
@@ -67,17 +67,16 @@ class Embedding(nn.Module):
         patch_emb = self.projection(x).flatten(2) # shape : (batch, d_size, n_patches)
         patch_emb = torch.cat((self.cls_token.expand(batch, -1, -1), patch_emb), axis=-1) # shape : (batch, d_size, n_patches + 1)
         pos_emb = patch_emb + self.positions
-        return self.dropout(pos_emb.permute(0, 2, 1))
+        return self.emb_drop(pos_emb.permute(0, 2, 1))
 
 class MultiHeadAttention(nn.Module):
     """ Attention mechanism. 
 
     Parameters
     ----------
-
     d_size : int - embedding dimension from config class
     n_heads : int - number of heads 
-    p : float - dropout rate
+    p_att : float - attention dropout rate
 
     Attributes
     ----------
@@ -92,14 +91,14 @@ class MultiHeadAttention(nn.Module):
         self,
         d_size,
         n_heads,
-        p
+        p_att
         ):
 
         super().__init__()
 
         self.c = nn.Linear(d_size, d_size * 3)
         self.linear = nn.Linear(d_size, d_size)
-        self.att_drop = nn.Dropout(p=p)
+        self.att_drop = nn.Dropout(p=p_att)
         self.n_heads = n_heads
         self.head_dim = d_size // n_heads
         
@@ -145,10 +144,9 @@ class MLP(nn.Module):
 
     Parameters
     ----------
-
     d_size : int - embedding dimension from config class
     mlp_size : int - expansion dimension in mlp module
-    p : float - dropout rate
+    p_mlp : float - mlp dropout rate
 
     Attributes
     ----------
@@ -160,7 +158,7 @@ class MLP(nn.Module):
         self,
         d_size,
         mlp_size,
-        p
+        p_mlp
         ):
 
         super().__init__()
@@ -169,7 +167,7 @@ class MLP(nn.Module):
             nn.Linear(d_size, mlp_size),
             nn.GELU(),
             nn.Linear(mlp_size, d_size),
-            nn.Dropout(p)
+            nn.Dropout(p_mlp)
         )
     
     def forward(self, x):
@@ -187,6 +185,145 @@ class MLP(nn.Module):
 
         return self.ff(x)
 
+class ViTBlock(nn.Module):
+    """ ViT Block with Multi-Head Attention module, MLP and Layer Norms. 
+
+    Parameters
+    ----------
+    d_size : int - embedding dimension from config class
+    n_heads : int - number of heads
+    mlp_size : int - expansion dimension in mlp module
+    p_att : float - attention dropout rate
+    p_mlp : float - mlp dropout rate
+    eps : float - a value added in denominator of Layer Norm for numerical stability
+
+
+    Attributes
+    ----------
+    mha : nn.Module - Multi-Head Attention module
+    mlp : nn.Module - MLP module
+    ln1 : nn.LayerNorm - layer normalization 1
+    ln2 : nn.LayerNorm - layer normalization 2
+
+    """
+
+    def __init__(
+        self,
+        d_size,
+        n_heads,
+        mlp_size,
+        p_att,
+        p_mlp,
+        eps = 1e-6
+        ):
+
+        super().__init__()
+
+        self.mha = MultiHeadAttention(
+            d_size = d_size,
+            n_heads = n_heads,
+            p_att = p_att
+        )
+
+        self.mlp = MLP(
+            d_size = d_size,
+            mlp_size = mlp_size,
+            p_mlp = p_mlp
+        )
+
+        self.ln1 = nn.LayerNorm(
+            normalized_shape=d_size,
+            eps = eps
+        )
+
+        self.ln2 = nn.LayerNorm(
+            normalized_shape=d_size,
+            eps = eps
+        )
+    
+    def forward(self, x):
+        """ Forward function.
+
+        Parameters
+        ----------
+        x : Tensor - input image with shape (batch, n_patches + cls_token, d_size)
+
+        Outputs
+        -------
+        Tensor - with shape (batch, n_patches + cls_token, d_size)
+
+        """
+
+        x = x + self.mha(self.ln1(x))
+        return x + self.mlp(self.ln2(x))
+
+class ViT(nn.Module):
+    """ ViT architecture with Embeddings, ViTBlocks and Classification head. 
+
+    Parameters
+    ----------
+    config : class - configuration class with all hyperparmeters for the architecture. It can be modified in config.py file.
+    in_channels : int - number of input channels
+    out_channles : int - number of classes to predict
+
+    Attributes
+    ----------
+    embeddings : nn.Module - patch and positional embeddings with cls token
+    vit_blocks : nn.ModuleList - collection of vit blocks
+    cls_head : nn.Linear - classification head
+
+    """
+
+    def __init__(
+        self,
+        config,
+        in_channels,
+        out_channels
+        ):
+
+        super().__init__()
+
+        self.embeddings = Embeddings(
+            in_channels = in_channels,
+            patch_size = config.patch_size,
+            img_size = config.img_size,
+            d_size = config.d_size,
+            p_emb = config.p_emb
+        )
+
+        self.vit_blocks = nn.ModuleList([
+            ViTBlock(
+                d_size = config.d_size,
+                n_heads = config.n_heads,
+                mlp_size = config.mlp_size,
+                p_att = config.p_att,
+                p_mlp = config.p_mlp
+            ) for i in range(config.layers)
+        ])
+
+        self.cls_head = nn.Linear(config.d_size, out_channels)
+    
+    def forward(self, x):
+        """ Forward function.
+
+        Parameters
+        ----------
+        x : Tensor - input image with shape (batch, in_channels, height, width)
+
+        Outputs
+        -------
+        Tensor - with shape (batch, out_channels)
+
+        """
+        x = self.embeddings(x)
+        for block in self.vit_blocks:
+            x = block(x) # shape : [batch, n_patches, d_size]
+        
+        x = x[:, 0, :] # shape : [batch, d_size]
+        return self.cls_head(x)
+         
+        
+
 
 
 
@@ -196,29 +333,9 @@ if __name__ == "__main__":
     # Sanity checks
     c = Config()
     img = torch.rand(1, 3, c.img_size, c.img_size)
-    emb = Embedding(
-        in_channels=3,
-        patch_size=c.patch_size,
-        img_size=c.img_size,
-        d_size=c.d_size,
-        p=c.pos_drop
-    )
-    mha = MultiHeadAttention(
-        d_size=c.d_size,
-        n_heads=c.heads,
-        p=c.att_drop
-    )
-    
-    mlp = MLP(
-        c.d_size,
-        c.mlp_size,
-        c.mlp_drop
-    )
+    vit = ViT(c, 3, 1000) 
+    print(vit(img).shape)
 
-    img_emb = emb(img)
-    img_mha = mha(img_emb)
-    print(mlp(img_mha).shape)
-        
 
 
 

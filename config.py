@@ -5,6 +5,6 @@ class Config:
     mlp_size : int = 3072
     n_heads : int = 12
     patch_size : int = 16
-    att_drop : float = 0.1
-    pos_drop : float = 0.1
-    mlp_drop : float = 0.1
+    p_att : float = 0.1
+    p_emb : float = 0.1
+    p_mlp : float = 0.1
