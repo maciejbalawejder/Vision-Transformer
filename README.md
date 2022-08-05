@@ -2,5 +2,6 @@
 
 #### To-do
 - [x] working model
-- [x] readable readme
-- [x] add pretrain models
+- [ ] add different models to config
+- [ ] readable readme
+- [ ] add pretrain models
