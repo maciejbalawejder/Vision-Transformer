@@ -4,4 +4,4 @@
 - [x] working model
 - [ ] add different models to config
 - [ ] readable readme
-- [ ] add pretrain models
+- [ ] add pretrain models + colab test notebook
