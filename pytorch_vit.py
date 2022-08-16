@@ -319,24 +319,12 @@ class ViT(nn.Module):
         for block in self.vit_blocks:
             x = block(x) # shape : [batch, n_patches, d_size]
         
-        x = x[:, 0, :] # shape : [batch, d_size]
+        x = x[:, 0, :] # shape : [batch, d_size] - we are taking only the cls token
         return self.cls_head(x)
-         
         
-
-
-
-
-
-
 if __name__ == "__main__":
     # Sanity checks
     c = Config()
     img = torch.rand(1, 3, c.img_size, c.img_size)
     vit = ViT(c, 3, 1000) 
     print(vit(img).shape)
-
-
-
-
-
