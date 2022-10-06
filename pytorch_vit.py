@@ -3,7 +3,6 @@ import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
 import math
-from config import Config
 
 
 class Embeddings(nn.Module):
@@ -80,7 +79,10 @@ class MultiHeadAttention(nn.Module):
 
     Attributes
     ----------
-    c : nn.Linear - qkv projection using single layer
+    Q : nn.Linear - query projection 
+    V : nn.Linear - key projection
+    K : nn.Linear - value projection
+
     linear : nn.Linear - final projection in attention mechanism
     att_drop : nn.Dropout - attention dropout layer
     
@@ -96,7 +98,10 @@ class MultiHeadAttention(nn.Module):
 
         super().__init__()
 
-        self.c = nn.Linear(d_size, d_size * 3)
+        self.Q = nn.Linear(d_size, d_size)
+        self.V = nn.Linear(d_size, d_size)
+        self.K = nn.Linear(d_size, d_size)
+
         self.linear = nn.Linear(d_size, d_size)
         self.att_drop = nn.Dropout(p=p_att)
         self.n_heads = n_heads
@@ -119,16 +124,10 @@ class MultiHeadAttention(nn.Module):
         batch, n_patches, d_size = x.shape
         mask = torch.triu(input = torch.ones((n_patches, n_patches))).expand(batch, 1, n_patches, n_patches)
 
-        qkv = self.c(x)
-        q, k, v = torch.split(
-            tensor = qkv, 
-            split_size_or_sections = d_size, 
-            dim = 2
-        ) 
 
-        q = q.reshape(batch, n_patches, self.n_heads, self.head_dim)
-        k = k.reshape(batch, n_patches, self.n_heads, self.head_dim)
-        v = v.reshape(batch, n_patches, self.n_heads, self.head_dim)
+        q = self.Q(x.reshape(batch, n_patches, self.n_heads, self.head_dim))
+        k = self.K(x.reshape(batch, n_patches, self.n_heads, self.head_dim))
+        v = self.V(x.reshape(batch, n_patches, self.n_heads, self.head_dim))
 
         QK = torch.einsum("bqhd, bkhd -> bhqk", [q, k]) / math.sqrt(d_size)
         QK = QK.masked_fill(mask==0, torch.finfo(torch.float32).min)
@@ -268,6 +267,7 @@ class ViT(nn.Module):
 
     Attributes
     ----------
+    encoder_norm : nn.LayerNorm - first layer normalization after embedding and before any of ViT Blocks
     embeddings : nn.Module - patch and positional embeddings with cls token
     vit_blocks : nn.ModuleList - collection of vit blocks
     cls_head : nn.Linear - classification head
@@ -282,6 +282,11 @@ class ViT(nn.Module):
         ):
 
         super().__init__()
+
+        self.encoder_norm = nn.LayerNorm(
+            normalized_shape = config.d_size,
+            eps = config.eps
+        )
 
         self.embeddings = Embeddings(
             in_channels = in_channels,
@@ -324,7 +329,8 @@ class ViT(nn.Module):
         
 if __name__ == "__main__":
     # Sanity checks
-    c = Config()
-    img = torch.rand(1, 3, c.img_size, c.img_size)
-    vit = ViT(c, 3, 1000) 
-    print(vit(img).shape)
+    # c = Base()
+    # img = torch.rand(1, 3, c.img_size, c.img_size)
+    # vit = ViT(c, 3, 1000) 
+    # print(vit(img).shape)
+    ...
