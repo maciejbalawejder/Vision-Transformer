@@ -285,7 +285,7 @@ class ViT(nn.Module):
         self.pre_logits = pre_logits
 
         self.encoder_norm = nn.LayerNorm(
-            normalized_shape = config.out_channels,
+            normalized_shape = config.d_size,
             eps = config.eps
         )
         
@@ -334,7 +334,7 @@ class ViT(nn.Module):
             x = self.pre_logits_layer(x)
             x = torch.tanh(x)
 
-        return self.head(x)
+        return self.head(self.encoder_norm(x))
 
 """
 if __name__ == "__main__":
