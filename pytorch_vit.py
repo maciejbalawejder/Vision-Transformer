@@ -6,6 +6,7 @@ import math
 
 class Embeddings(nn.Module):
     """ Patch and Position Embeddings + CLS Token. 
+
     Parameters
     ----------
     in_channels : int - input channels of the image
@@ -13,6 +14,7 @@ class Embeddings(nn.Module):
     img_size : int - height or width of the image assuming that it's square
     d_size : int - embedding dimension from config class
     p_emb : float - embedding dropout rate
+
     Attributes
     ----------
     projection : nn.Conv2d - projection of input image to the embedding patches 
@@ -48,9 +50,11 @@ class Embeddings(nn.Module):
     
     def forward(self, x):
         """ Forward function.
+
         Parameters
         ----------
         x : Tensor - input image with shape (batch, in_channels, height, width)
+
         Outputs
         -------
         Tensor - with shape (batch, n_patches + 1, d_size)
@@ -63,12 +67,14 @@ class Embeddings(nn.Module):
         return self.emb_drop(pos_emb.permute(0, 2, 1))
 
 class MultiHeadAttention(nn.Module):
-    """ Attention mechanism. 
+    """ Attention mechanism.
+
     Parameters
     ----------
     d_size : int - embedding dimension from config class
     n_heads : int - number of heads 
     p_att : float - attention dropout rate
+
     Attributes
     ----------
     Q : nn.Linear - query projection 
@@ -100,9 +106,11 @@ class MultiHeadAttention(nn.Module):
         
     def forward(self, x):
         """ Forward function.
+
         Parameters
         ----------
         x : Tensor - input image with shape (batch, n_patches + cls_token, d_size)
+
         Outputs
         -------
         Tensor - with shape (batch, n_patches + cls_token, d_size)
@@ -127,11 +135,13 @@ class MultiHeadAttention(nn.Module):
         
 class MLP(nn.Module):
     """ Feed Forward module. 
+
     Parameters
     ----------
     d_size : int - embedding dimension from config class
     mlp_size : int - expansion dimension in mlp module
     p_mlp : float - mlp dropout rate
+
     Attributes
     ----------
     ff : nn.Sequential - all layers in one module
@@ -155,9 +165,11 @@ class MLP(nn.Module):
     
     def forward(self, x):
         """ Forward function.
+
         Parameters
         ----------
         x : Tensor - input image with shape (batch, n_patches + cls_token, d_size)
+
         Outputs
         -------
         Tensor - with shape (batch, n_patches + cls_token, d_size)
@@ -167,6 +179,7 @@ class MLP(nn.Module):
 
 class ViTBlock(nn.Module):
     """ ViT Block with Multi-Head Attention module, MLP and Layer Norms. 
+
     Parameters
     ----------
     d_size : int - embedding dimension from config class
@@ -175,6 +188,7 @@ class ViTBlock(nn.Module):
     p_att : float - attention dropout rate
     p_mlp : float - mlp dropout rate
     eps : float - a value added in denominator of Layer Norm for numerical stability
+
     Attributes
     ----------
     mha : nn.Module - Multi-Head Attention module
@@ -222,6 +236,7 @@ class ViTBlock(nn.Module):
         Parameters
         ----------
         x : Tensor - input image with shape (batch, n_patches + cls_token, d_size)
+
         Outputs
         -------
         Tensor - with shape (batch, n_patches + cls_token, d_size)
@@ -237,6 +252,7 @@ class ViT(nn.Module):
     config : class - configuration class with all hyperparmeters for the architecture. It can be modified in config.py file.
     in_channels : int - number of input channels.
     pre_logits : bool - defines whether there is an pre_logits layer
+
     Attributes
     ----------
     encoder_norm : nn.LayerNorm - layer normalization before classification head
@@ -286,9 +302,11 @@ class ViT(nn.Module):
     
     def forward(self, x):
         """ Forward function.
+
         Parameters
         ----------
         x : Tensor - input image with shape (batch, in_channels, height, width)
+        
         Outputs
         -------
         Tensor - with shape (batch, out_channels)
