@@ -1,5 +1,5 @@
 class Base:
-    img_size : int = 144
+    img_size : int = 224
     layers : int = 12
     d_size : int = 768
     mlp_size : int = 3072
@@ -8,6 +8,10 @@ class Base:
     p_att : float = 0.1
     p_emb : float = 0.1
     p_mlp : float = 0.1
+    out_channels : int = 21843
+    eps : float = 1e-6
+    pre_logits = True
+
 
 class L_16(Base):
     layers : int = 12

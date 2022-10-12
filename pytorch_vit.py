@@ -4,7 +4,6 @@ from torch import Tensor
 import torch.nn.functional as F
 import math
 
-
 class Embeddings(nn.Module):
     """ Patch and Position Embeddings + CLS Token. 
 
@@ -98,16 +97,16 @@ class MultiHeadAttention(nn.Module):
 
         super().__init__()
 
-        self.Q = nn.Linear(d_size, d_size)
-        self.V = nn.Linear(d_size, d_size)
-        self.K = nn.Linear(d_size, d_size)
-
         self.linear = nn.Linear(d_size, d_size)
         self.att_drop = nn.Dropout(p=p_att)
         self.n_heads = n_heads
         self.head_dim = d_size // n_heads
+
+        self.Q = nn.Linear(d_size, d_size)
+        self.V = nn.Linear(d_size, d_size)
+        self.K = nn.Linear(d_size, d_size)
+
         
-    
     def forward(self, x):
         """ Forward function.
 
@@ -125,9 +124,9 @@ class MultiHeadAttention(nn.Module):
         mask = torch.triu(input = torch.ones((n_patches, n_patches))).expand(batch, 1, n_patches, n_patches)
 
 
-        q = self.Q(x.reshape(batch, n_patches, self.n_heads, self.head_dim))
-        k = self.K(x.reshape(batch, n_patches, self.n_heads, self.head_dim))
-        v = self.V(x.reshape(batch, n_patches, self.n_heads, self.head_dim))
+        q = self.Q(x).reshape(batch, n_patches, self.n_heads, self.head_dim)
+        k = self.K(x).reshape(batch, n_patches, self.n_heads, self.head_dim)
+        v = self.V(x).reshape(batch, n_patches, self.n_heads, self.head_dim)
 
         QK = torch.einsum("bqhd, bkhd -> bhqk", [q, k]) / math.sqrt(d_size)
         QK = QK.masked_fill(mask==0, torch.finfo(torch.float32).min)
@@ -262,15 +261,16 @@ class ViT(nn.Module):
     Parameters
     ----------
     config : class - configuration class with all hyperparmeters for the architecture. It can be modified in config.py file.
-    in_channels : int - number of input channels
-    out_channles : int - number of classes to predict
+    in_channels : int - number of input channels.
+    pre_logits : bool - defines whether there is an pre_logits layer
 
     Attributes
     ----------
-    encoder_norm : nn.LayerNorm - first layer normalization after embedding and before any of ViT Blocks
+    encoder_norm : nn.LayerNorm - layer normalization before classification head
+    pre_logits : nn.Linear - last linear projection before classification head
     embeddings : nn.Module - patch and positional embeddings with cls token
     vit_blocks : nn.ModuleList - collection of vit blocks
-    cls_head : nn.Linear - classification head
+    head : nn.Linear - classification head
 
     """
 
@@ -278,15 +278,19 @@ class ViT(nn.Module):
         self,
         config,
         in_channels,
-        out_channels
+        pre_logits=False
         ):
 
         super().__init__()
+        self.pre_logits = pre_logits
 
         self.encoder_norm = nn.LayerNorm(
             normalized_shape = config.d_size,
             eps = config.eps
         )
+        
+        if self.pre_logits:
+            self.pre_logits_layer = nn.Linear(config.d_size, config.d_size)
 
         self.embeddings = Embeddings(
             in_channels = in_channels,
@@ -306,7 +310,7 @@ class ViT(nn.Module):
             ) for i in range(config.layers)
         ])
 
-        self.cls_head = nn.Linear(config.d_size, out_channels)
+        self.head = nn.Linear(config.d_size, config.out_channels)
     
     def forward(self, x):
         """ Forward function.
@@ -325,12 +329,17 @@ class ViT(nn.Module):
             x = block(x) # shape : [batch, n_patches, d_size]
         
         x = x[:, 0, :] # shape : [batch, d_size] - we are taking only the cls token
-        return self.cls_head(x)
-        
+
+        if self.pre_logits:
+            x = self.pre_logits_layer(x)
+            x = torch.tanh(x)
+
+        return self.head(self.encoder_norm(x))
+
+# Sanity checks
 if __name__ == "__main__":
-    # Sanity checks
-    # c = Base()
-    # img = torch.rand(1, 3, c.img_size, c.img_size)
-    # vit = ViT(c, 3, 1000) 
-    # print(vit(img).shape)
-    ...
+    from config import Base
+    c = Base()
+    img = torch.rand(1, 3, c.img_size, c.img_size)
+    vit = ViT(c, 3, True) 
+    print(vit(img).shape)
