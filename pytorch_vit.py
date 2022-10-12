@@ -261,16 +261,15 @@ class ViT(nn.Module):
     Parameters
     ----------
     config : class - configuration class with all hyperparmeters for the architecture. It can be modified in config.py file.
-    in_channels : int - number of input channels.
-    pre_logits : bool - defines whether there is an pre_logits layer
+    in_channels : int - number of input channels
+    out_channles : int - number of classes to predict
 
     Attributes
     ----------
-    encoder_norm : nn.LayerNorm - layer normalization before classification head
-    pre_logits : nn.Linear - last linear projection before classification head
+    encoder_norm : nn.LayerNorm - first layer normalization after embedding and before any of ViT Blocks
     embeddings : nn.Module - patch and positional embeddings with cls token
     vit_blocks : nn.ModuleList - collection of vit blocks
-    head : nn.Linear - classification head
+    cls_head : nn.Linear - classification head
 
     """
 
@@ -278,19 +277,15 @@ class ViT(nn.Module):
         self,
         config,
         in_channels,
-        pre_logits=False
+        out_channels
         ):
 
         super().__init__()
-        self.pre_logits = pre_logits
 
         self.encoder_norm = nn.LayerNorm(
             normalized_shape = config.d_size,
             eps = config.eps
         )
-        
-        if self.pre_logits:
-            self.pre_logits_layer = nn.Linear(config.d_size, config.d_size)
 
         self.embeddings = Embeddings(
             in_channels = in_channels,
@@ -310,7 +305,7 @@ class ViT(nn.Module):
             ) for i in range(config.layers)
         ])
 
-        self.head = nn.Linear(config.d_size, config.out_channels)
+        self.cls_head = nn.Linear(config.d_size, out_channels)
     
     def forward(self, x):
         """ Forward function.
@@ -329,17 +324,12 @@ class ViT(nn.Module):
             x = block(x) # shape : [batch, n_patches, d_size]
         
         x = x[:, 0, :] # shape : [batch, d_size] - we are taking only the cls token
-
-        if self.pre_logits:
-            x = self.pre_logits_layer(x)
-            x = torch.tanh(x)
-
-        return self.head(self.encoder_norm(x))
-
-# Sanity checks
+        return self.cls_head(x)
+        
 if __name__ == "__main__":
-    from config import Base
-    c = Base()
-    img = torch.rand(1, 3, c.img_size, c.img_size)
-    vit = ViT(c, 3, True) 
-    print(vit(img).shape)
+    # Sanity checks
+    # c = Base()
+    # img = torch.rand(1, 3, c.img_size, c.img_size)
+    # vit = ViT(c, 3, 1000) 
+    # print(vit(img).shape)
+    ...
