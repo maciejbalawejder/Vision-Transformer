@@ -3,6 +3,9 @@ import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
 import math
+from config import get_config
+import wget
+import numpy as np
 
 class Embeddings(nn.Module):
     """ Patch and Position Embeddings + CLS Token. 
@@ -245,16 +248,15 @@ class ViTBlock(nn.Module):
         x = x + self.mha(self.ln1(x))
         return x + self.mlp(self.ln2(x))
 
-class ViT(nn.Module):
+class VisualTransformer(nn.Module):
     """ ViT architecture with Embeddings, ViTBlocks and Classification head. 
+
     Parameters
     ----------
     config : class - configuration class with all hyperparmeters for the architecture. It can be modified in config.py file.
     in_channels : int - number of input channels.
-    img_size : int - the size(height or width) of input image
-    pretrained : bool - defines whether use the pretrain on ImageNet21k
-    fine_tuned : bool - defines whether model is fine-tuned on ImageNet1k
-
+    pre_logits : bool - defines whether there's additional pre-logits layer.
+    
     Attributes
     ----------
     encoder_norm : nn.LayerNorm - layer normalization before classification head
@@ -266,17 +268,12 @@ class ViT(nn.Module):
 
     def __init__(
         self,
-        config_name,
+        config,
         in_channels,
-        img_size,
-        pretrained=False,
-        fine_tuned=False
+        pre_logits=False
         ):
 
         super().__init__()
-        self.pre_logits = False
-
-        config = config
 
         self.encoder_norm = nn.LayerNorm(
             normalized_shape = config.d_size,
@@ -328,6 +325,40 @@ class ViT(nn.Module):
             x = torch.tanh(x)
 
         return self.head(self.encoder_norm(x))
+
+class ViT:
+    """ Whole ViT architecture with additional options to load the pretrained and fine-tuned weights. 
+    
+    Parameters
+    ----------
+    config_name : str - configuration name "B-16", "B-32", "L-16", "L-32"
+    pretrained : bool - defines whether model was pretrained on ImageNet21k
+    fine_tuned : bool - defines whether model was fine-tuned on ImageNet1k after pretraining.
+    
+    Attributes
+    ----------
+    encoder_norm : nn.LayerNorm - layer normalization before classification head
+    pre_logits : nn.Linear - last linear projection before classification head
+    embeddings : nn.Module - patch and positional embeddings with cls token
+    vit_blocks : nn.ModuleList - collection of vit blocks
+    head : nn.Linear - classification head
+    """
+
+    def __init__(
+        self,
+        config_name,
+        pretrained=False,
+        fine_tuned=False
+        ):
+
+        config, url = get_config(config_name, pretrained, fine_tuned)
+        filename = wget.download(url, out="weights")
+        weights = np.load(filename)
+        ...
+
+
+
+
 
 # Sanity checks
 if __name__ == "__main__":
