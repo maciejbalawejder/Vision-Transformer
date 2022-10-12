@@ -6,7 +6,6 @@ import math
 
 class Embeddings(nn.Module):
     """ Patch and Position Embeddings + CLS Token. 
-
     Parameters
     ----------
     in_channels : int - input channels of the image
@@ -14,7 +13,6 @@ class Embeddings(nn.Module):
     img_size : int - height or width of the image assuming that it's square
     d_size : int - embedding dimension from config class
     p_emb : float - embedding dropout rate
-
     Attributes
     ----------
     projection : nn.Conv2d - projection of input image to the embedding patches 
@@ -50,15 +48,12 @@ class Embeddings(nn.Module):
     
     def forward(self, x):
         """ Forward function.
-
         Parameters
         ----------
         x : Tensor - input image with shape (batch, in_channels, height, width)
-
         Outputs
         -------
         Tensor - with shape (batch, n_patches + 1, d_size)
-
         """
 
         batch, in_channels, height, width = x.shape
@@ -69,23 +64,19 @@ class Embeddings(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     """ Attention mechanism. 
-
     Parameters
     ----------
     d_size : int - embedding dimension from config class
     n_heads : int - number of heads 
     p_att : float - attention dropout rate
-
     Attributes
     ----------
     Q : nn.Linear - query projection 
     V : nn.Linear - key projection
     K : nn.Linear - value projection
-
     linear : nn.Linear - final projection in attention mechanism
     att_drop : nn.Dropout - attention dropout layer
     
-
     """
 
     def __init__(
@@ -109,15 +100,12 @@ class MultiHeadAttention(nn.Module):
         
     def forward(self, x):
         """ Forward function.
-
         Parameters
         ----------
         x : Tensor - input image with shape (batch, n_patches + cls_token, d_size)
-
         Outputs
         -------
         Tensor - with shape (batch, n_patches + cls_token, d_size)
-
         """
 
         batch, n_patches, d_size = x.shape
@@ -139,17 +127,14 @@ class MultiHeadAttention(nn.Module):
         
 class MLP(nn.Module):
     """ Feed Forward module. 
-
     Parameters
     ----------
     d_size : int - embedding dimension from config class
     mlp_size : int - expansion dimension in mlp module
     p_mlp : float - mlp dropout rate
-
     Attributes
     ----------
     ff : nn.Sequential - all layers in one module
-
     """
 
     def __init__(
@@ -170,22 +155,18 @@ class MLP(nn.Module):
     
     def forward(self, x):
         """ Forward function.
-
         Parameters
         ----------
         x : Tensor - input image with shape (batch, n_patches + cls_token, d_size)
-
         Outputs
         -------
         Tensor - with shape (batch, n_patches + cls_token, d_size)
-
         """
 
         return self.ff(x)
 
 class ViTBlock(nn.Module):
     """ ViT Block with Multi-Head Attention module, MLP and Layer Norms. 
-
     Parameters
     ----------
     d_size : int - embedding dimension from config class
@@ -194,15 +175,12 @@ class ViTBlock(nn.Module):
     p_att : float - attention dropout rate
     p_mlp : float - mlp dropout rate
     eps : float - a value added in denominator of Layer Norm for numerical stability
-
-
     Attributes
     ----------
     mha : nn.Module - Multi-Head Attention module
     mlp : nn.Module - MLP module
     ln1 : nn.LayerNorm - layer normalization 1
     ln2 : nn.LayerNorm - layer normalization 2
-
     """
 
     def __init__(
@@ -241,15 +219,12 @@ class ViTBlock(nn.Module):
     
     def forward(self, x):
         """ Forward function.
-
         Parameters
         ----------
         x : Tensor - input image with shape (batch, n_patches + cls_token, d_size)
-
         Outputs
         -------
         Tensor - with shape (batch, n_patches + cls_token, d_size)
-
         """
 
         x = x + self.mha(self.ln1(x))
@@ -257,35 +232,37 @@ class ViTBlock(nn.Module):
 
 class ViT(nn.Module):
     """ ViT architecture with Embeddings, ViTBlocks and Classification head. 
-
     Parameters
     ----------
     config : class - configuration class with all hyperparmeters for the architecture. It can be modified in config.py file.
-    in_channels : int - number of input channels
-    out_channles : int - number of classes to predict
-
+    in_channels : int - number of input channels.
+    pre_logits : bool - defines whether there is an pre_logits layer
     Attributes
     ----------
-    encoder_norm : nn.LayerNorm - first layer normalization after embedding and before any of ViT Blocks
+    encoder_norm : nn.LayerNorm - layer normalization before classification head
+    pre_logits : nn.Linear - last linear projection before classification head
     embeddings : nn.Module - patch and positional embeddings with cls token
     vit_blocks : nn.ModuleList - collection of vit blocks
-    cls_head : nn.Linear - classification head
-
+    head : nn.Linear - classification head
     """
 
     def __init__(
         self,
         config,
         in_channels,
-        out_channels
+        pre_logits=False
         ):
 
         super().__init__()
+        self.pre_logits = pre_logits
 
         self.encoder_norm = nn.LayerNorm(
             normalized_shape = config.d_size,
             eps = config.eps
         )
+        
+        if self.pre_logits:
+            self.pre_logits_layer = nn.Linear(config.d_size, config.d_size)
 
         self.embeddings = Embeddings(
             in_channels = in_channels,
@@ -305,31 +282,33 @@ class ViT(nn.Module):
             ) for i in range(config.layers)
         ])
 
-        self.cls_head = nn.Linear(config.d_size, out_channels)
+        self.head = nn.Linear(config.d_size, config.out_channels)
     
     def forward(self, x):
         """ Forward function.
-
         Parameters
         ----------
         x : Tensor - input image with shape (batch, in_channels, height, width)
-
         Outputs
         -------
         Tensor - with shape (batch, out_channels)
-
         """
         x = self.embeddings(x)
         for block in self.vit_blocks:
             x = block(x) # shape : [batch, n_patches, d_size]
         
         x = x[:, 0, :] # shape : [batch, d_size] - we are taking only the cls token
-        return self.cls_head(x)
-        
+
+        if self.pre_logits:
+            x = self.pre_logits_layer(x)
+            x = torch.tanh(x)
+
+        return self.head(self.encoder_norm(x))
+
+# Sanity checks
 if __name__ == "__main__":
-    # Sanity checks
-    # c = Base()
-    # img = torch.rand(1, 3, c.img_size, c.img_size)
-    # vit = ViT(c, 3, 1000) 
-    # print(vit(img).shape)
-    ...
+    from config import Base
+    c = Base()
+    img = torch.rand(1, 3, c.img_size, c.img_size)
+    vit = ViT(c, 3, True) 
+    print(vit(img).shape)
