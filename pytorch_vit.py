@@ -251,7 +251,9 @@ class ViT(nn.Module):
     ----------
     config : class - configuration class with all hyperparmeters for the architecture. It can be modified in config.py file.
     in_channels : int - number of input channels.
-    pre_logits : bool - defines whether there is an pre_logits layer
+    img_size : int - the size(height or width) of input image
+    pretrained : bool - defines whether use the pretrain on ImageNet21k
+    fine_tuned : bool - defines whether model is fine-tuned on ImageNet1k
 
     Attributes
     ----------
@@ -264,13 +266,17 @@ class ViT(nn.Module):
 
     def __init__(
         self,
-        config,
+        config_name,
         in_channels,
-        pre_logits=False
+        img_size,
+        pretrained=False,
+        fine_tuned=False
         ):
 
         super().__init__()
-        self.pre_logits = pre_logits
+        self.pre_logits = False
+
+        config = config
 
         self.encoder_norm = nn.LayerNorm(
             normalized_shape = config.d_size,
@@ -306,7 +312,7 @@ class ViT(nn.Module):
         Parameters
         ----------
         x : Tensor - input image with shape (batch, in_channels, height, width)
-        
+
         Outputs
         -------
         Tensor - with shape (batch, out_channels)
