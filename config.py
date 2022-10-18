@@ -68,7 +68,7 @@ def get_config(config_name, pretrained, fine_tuned):
 def get_weights(config_name, pretrained, fine_tuned):
     config, url = get_config(config_name, pretrained, fine_tuned)
 
-    if url is not "":
+    if url != "":
         filename = wget.download(url, out="weights")
         npy_weights = np.load(filename) # numpy weights
         pre_logits, torch_weights = rename_weights(npy_weights) # convert numpy to torch weights and rename them
