@@ -4,7 +4,7 @@ import torch
 
 class Base:
     img_size : int = 244
-    n_patches : int = 16
+    patch_size : int = 16
     layers : int = 12
     d_size : int = 768
     mlp_size : int = 3072
@@ -28,7 +28,7 @@ def get_config(config_name, pretrained, fine_tuned):
             base.classes = 1000
 
     elif config_name == "B_32":
-        base.n_patches = 32
+        base.patch_size = 32
         if pretrained:
             url = "https://storage.googleapis.com/vit_models/imagenet21k/ViT-B_32.npz"
 
@@ -54,7 +54,7 @@ def get_config(config_name, pretrained, fine_tuned):
         base.d_size = 1024
         base.mlp_size = 4096
         base.heads = 16
-        base.n_patches = 32
+        base.patch_size = 32
 
         if pretrained:
             url = "https://storage.googleapis.com/vit_models/imagenet21k/ViT-L_32.npz"
