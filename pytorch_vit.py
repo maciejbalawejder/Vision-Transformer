@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 import torch.nn.functional as F
 import math
-from config import get_config
+from config import get_weights, load_weights
 import wget
 import numpy as np
 
@@ -248,19 +248,21 @@ class ViTBlock(nn.Module):
         x = x + self.mha(self.ln1(x))
         return x + self.mlp(self.ln2(x))
 
-class VisualTransformer(nn.Module):
+class VisionTransformer(nn.Module):
     """ ViT architecture with Embeddings, ViTBlocks and Classification head. 
 
     Parameters
     ----------
-    config : class - configuration class with all hyperparmeters for the architecture. It can be modified in config.py file.
-    in_channels : int - number of input channels.
-    pre_logits : bool - defines whether there's additional pre-logits layer.
+    config : class - configuration class with model specifications
+    pretrained : bool - defines whether model was pretrained on ImageNet21k
+    fine_tuned : bool - defines whether model was fine-tuned on ImageNet1k after pretraining.
+    pre_logits : bool - defines wheter model has layer before the classification head.
+    in_channels : int - number of input channels, default 3.
     
     Attributes
     ----------
     encoder_norm : nn.LayerNorm - layer normalization before classification head
-    pre_logits : nn.Linear - last linear projection before classification head
+    pre_logits_layer : nn.Linear - last linear projection before classification head
     embeddings : nn.Module - patch and positional embeddings with cls token
     vit_blocks : nn.ModuleList - collection of vit blocks
     head : nn.Linear - classification head
@@ -269,11 +271,15 @@ class VisualTransformer(nn.Module):
     def __init__(
         self,
         config,
-        in_channels,
-        pre_logits=False
+        pretrained = False,
+        fine_tuned = False,
+        pre_logits = False,
+        in_channels = 3
         ):
 
         super().__init__()
+
+        self.pre_logits = pre_logits
 
         self.encoder_norm = nn.LayerNorm(
             normalized_shape = config.d_size,
@@ -326,7 +332,7 @@ class VisualTransformer(nn.Module):
 
         return self.head(self.encoder_norm(x))
 
-class ViT:
+class ViT(nn.Module):
     """ Whole ViT architecture with additional options to load the pretrained and fine-tuned weights. 
     
     Parameters
@@ -334,36 +340,47 @@ class ViT:
     config_name : str - configuration name "B-16", "B-32", "L-16", "L-32"
     pretrained : bool - defines whether model was pretrained on ImageNet21k
     fine_tuned : bool - defines whether model was fine-tuned on ImageNet1k after pretraining.
+    in_channels : int - number of input channels, default 3.
+    
     
     Attributes
     ----------
-    encoder_norm : nn.LayerNorm - layer normalization before classification head
-    pre_logits : nn.Linear - last linear projection before classification head
-    embeddings : nn.Module - patch and positional embeddings with cls token
-    vit_blocks : nn.ModuleList - collection of vit blocks
-    head : nn.Linear - classification head
+    vit_model : nn.Module - the Visual Transformer model
+
     """
 
     def __init__(
         self,
         config_name,
         pretrained=False,
-        fine_tuned=False
+        fine_tuned=False,
+        in_channels=3
         ):
 
-        config, url = get_config(config_name, pretrained, fine_tuned)
-        filename = wget.download(url, out="weights")
-        weights = np.load(filename)
-        ...
+        super().__init__()
+
+        config, pre_logits, torch_weights = get_weights(config_name, pretrained, fine_tuned)
+        self.vit_model = VisionTransformer(config, pretrained, fine_tuned, pre_logits)
+        
+        if torch_weights != 0:
+            self.vit_model = load_weights(torch_weights, self.vit_model)
 
 
+    def forward(self, x):
+        """ Forward function.
 
+        Parameters
+        ----------
+        x : Tensor - input image with shape (batch, in_channels, height, width)
 
-
+        Outputs
+        -------
+        Tensor - with shape (batch, out_channels)
+        """
+        return self.vit_model(x)
+    
 # Sanity checks
 if __name__ == "__main__":
-    from config import Base
-    c = Base()
-    img = torch.rand(1, 3, c.img_size, c.img_size)
-    vit = ViT(c, 3, True) 
+    img = torch.rand(1, 3, 224, 224)
+    vit = ViT("B-16", False, False, False) 
     print(vit(img).shape)

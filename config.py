@@ -66,15 +66,18 @@ def get_config(config_name, pretrained, fine_tuned):
     return base, url 
 
 def get_weights(config_name, pretrained, fine_tuned):
-    pre_logits = False
     config, url = get_config(config_name, pretrained, fine_tuned)
-    filename = wget.download(url, out="weights")
-    npy_weights = np.load(filename) # numpy weights
-    torch_weights = rename_weights(npy_weights) # convert numpy to torch weights and rename them
-    if "pre_logits_name" in torch_weights:
-        pre_logits = True
 
-    return torch_weights, pre_logits
+    if url is not "":
+        filename = wget.download(url, out="weights")
+        npy_weights = np.load(filename) # numpy weights
+        pre_logits, torch_weights = rename_weights(npy_weights) # convert numpy to torch weights and rename them
+
+    else:
+        pre_logits = False
+        torch_weights = 0
+
+    return config, pre_logits, torch_weights
 
 def load_weights(torch_weights, model):
     matches = []
@@ -86,17 +89,15 @@ def load_weights(torch_weights, model):
                 matches.append(True)
     
     # Checking if all shapes are correct
-    if all(matches):
-        torch.save(torch_weights, "model_weights.pth")
-        model.load_state_dict(torch.load("model_weight.pth"))
-    
-    else:
-        " Some of the weights are different than in the original model. "
-
+    assert all(matches), " Some of the weights are different than in the original model. "
+    torch.save(torch_weights, "model_weights.pth")
+    model.load_state_dict(torch.load("model_weight.pth"))
+    return model
 
 def rename_weights(npy_weights):
     torch_weights = {}
     fixed_w = {}
+    pre_logits = False
 
     for name, weight in npy_weights.items():
         n = name.replace("/", ".")
@@ -171,8 +172,13 @@ def rename_weights(npy_weights):
         if n[0] == ".":
             n = n[1:]
 
+        if "pre_logits" in n:
+            pre_logits = True
+
         torch_weights[n] = torch.from_numpy(w)
         print(n, w.shape)
+
+    return pre_logits, torch_weights
 
 
 
