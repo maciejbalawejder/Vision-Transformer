@@ -51,8 +51,8 @@ output = vit(img) # output shape : [1, classes]
 
 
 #### To-do
-- [x] working model
+- [ ] working model
 - [x] add different models to config
-- [ ] readable readme
-- [ ] add pretrain models + colab test notebook
-- [ ] add wget library
+- [x] readable readme
+- [ ] colab notebook 
+- [ ] add comments to functions in config.py
